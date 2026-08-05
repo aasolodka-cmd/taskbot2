@@ -1,6 +1,6 @@
 import datetime as dt
 
-from aiogram import Router
+from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
@@ -69,6 +69,11 @@ async def cmd_mytasks(message: Message):
         await message.answer(text)
         for t in overdue:
             await message.answer(t.title, reply_markup=task_item_kb(t.id, is_admin=user.is_admin))
+
+
+@router.message(F.text == "Мои задачи")
+async def btn_mytasks(message: Message):
+    await cmd_mytasks(message)
 
 
 @router.callback_query(TaskDoneCB.filter())

@@ -34,6 +34,11 @@ async def cmd_newcall(message: Message, state: FSMContext):
     await message.answer("Название созвона?")
 
 
+@router.message(F.text == "Новый созвон")
+async def btn_newcall(message: Message, state: FSMContext):
+    await cmd_newcall(message, state)
+
+
 @router.message(NewCallFSM.title)
 async def newcall_title(message: Message, state: FSMContext):
     await state.update_data(title=message.text, selected=set())

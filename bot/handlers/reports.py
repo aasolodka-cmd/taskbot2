@@ -2,7 +2,7 @@ import csv
 import datetime as dt
 import io
 
-from aiogram import Router
+from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import BufferedInputFile, Message
 from sqlalchemy import select
@@ -48,6 +48,11 @@ async def cmd_report(message: Message):
     await message.answer_document(BufferedInputFile(data, filename=filename), caption="Выгрузка по команде ▪️")
 
 
+@router.message(F.text == "Отчёт (CSV)")
+async def btn_report(message: Message):
+    await cmd_report(message)
+
+
 @router.message(Command("mystats"))
 async def cmd_mystats(message: Message):
     user_id = message.from_user.id
@@ -77,3 +82,8 @@ async def cmd_mystats(message: Message):
         f"Просрочено: {overdue}\n"
     )
     await message.answer(text)
+
+
+@router.message(F.text == "Моя статистика")
+async def btn_mystats(message: Message):
+    await cmd_mystats(message)

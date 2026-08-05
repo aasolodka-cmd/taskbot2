@@ -40,6 +40,11 @@ async def cmd_team(message: Message):
     await message.answer("Команда:\n\n" + "\n".join(lines))
 
 
+@router.message(F.text == "Команда")
+async def btn_team(message: Message):
+    await cmd_team(message)
+
+
 # ---------- Создание обычной задачи ----------
 
 class NewTaskFSM(StatesGroup):
@@ -55,6 +60,11 @@ async def cmd_newtask(message: Message, state: FSMContext):
         return
     await state.set_state(NewTaskFSM.title)
     await message.answer("Название задачи?")
+
+
+@router.message(F.text == "Новая задача")
+async def btn_newtask(message: Message, state: FSMContext):
+    await cmd_newtask(message, state)
 
 
 @router.message(NewTaskFSM.title)
@@ -158,6 +168,11 @@ async def cmd_newrecurring(message: Message, state: FSMContext):
         return
     await state.set_state(NewRecurringFSM.title)
     await message.answer("Название повторяющейся задачи?")
+
+
+@router.message(F.text == "Повторяющаяся задача")
+async def btn_newrecurring(message: Message, state: FSMContext):
+    await cmd_newrecurring(message, state)
 
 
 @router.message(NewRecurringFSM.title)

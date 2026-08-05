@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from bot.config import ADMIN_IDS
 from bot.database import async_session
+from bot.keyboards import main_menu_kb
 from bot.models import User
 
 router = Router()
@@ -49,4 +50,4 @@ async def cmd_start(message: Message):
             "/team — список команды\n"
         )
     text += "\n/mytasks — мои задачи\n/mystats — моя статистика"
-    await message.answer(text)
+    await message.answer(text, reply_markup=main_menu_kb(is_admin))

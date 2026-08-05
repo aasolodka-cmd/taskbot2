@@ -1,5 +1,7 @@
 from aiogram.filters.callback_data import CallbackData
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import (
+    InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup,
+)
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 
@@ -56,3 +58,12 @@ def call_item_kb(call_id: int) -> InlineKeyboardMarkup:
     kb.button(text="Отменить созвон", callback_data=CallCancelCB(call_id=call_id))
     kb.adjust(1)
     return kb.as_markup()
+
+
+def main_menu_kb(is_admin: bool) -> ReplyKeyboardMarkup:
+    rows = [[KeyboardButton(text="Мои задачи"), KeyboardButton(text="Моя статистика")]]
+    if is_admin:
+        rows.append([KeyboardButton(text="Новая задача"), KeyboardButton(text="Повторяющаяся задача")])
+        rows.append([KeyboardButton(text="Новый созвон"), KeyboardButton(text="Команда")])
+        rows.append([KeyboardButton(text="Отчёт (CSV)")])
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
