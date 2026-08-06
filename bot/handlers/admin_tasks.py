@@ -10,10 +10,10 @@ from sqlalchemy import select
 from bot.database import async_session
 from bot.keyboards import (
     AssigneeCB, AssigneeDoneCB, TaskDeleteCB, TaskRescheduleCB,
-    assignee_multiselect_kb,
+    assignee_multiselect_kb, task_item_kb,
 )
 from bot.models import RecurringTask, RecurringTaskAssignee, Task, TaskAssignee, User
-from bot.utils import fmt_time
+from bot.utils import fmt_time, today_msk
 
 router = Router()
 
@@ -43,6 +43,42 @@ async def cmd_team(message: Message):
 @router.message(F.text == "Команда")
 async def btn_team(message: Message):
     await cmd_team(message)
+
+
+# ---------- /managetasks — перенос дедлайна и удаление ----------
+
+@router.message(Command("managetasks"))
+async def cmd_managetasks(message: Message):
+    if not await is_admin(message.from_user.id):
+        return
+
+    async with async_session() as session:
+        rows = (
+            await session.execute(
+                select(Task, User.full_name)
+                .join(TaskAssignee, TaskAssignee.task_id == Task.id)
+                .join(User, User.id == TaskAssignee.user_id)
+                .where(Task.is_deleted == False, Task.is_done == False)  # noqa: E712
+                .order_by(Task.due_date, Task.due_time)
+            )
+        ).all()
+
+    if not rows:
+        await message.answer("Открытых задач нет ▪️")
+        return
+
+    await message.answer("▪️ Открытые задачи — можно перенести дедлайн или удалить:")
+    for task, full_name in rows:
+        due = task.due_date.strftime("%d.%m.%Y")
+        if task.due_time:
+            due += f" {fmt_time(task.due_time)}"
+        text = f"{task.title}\n{full_name} — до {due}"
+        await message.answer(text, reply_markup=task_item_kb(task.id, is_admin=True))
+
+
+@router.message(F.text == "Управление задачами")
+async def btn_managetasks(message: Message):
+    await cmd_managetasks(message)
 
 
 # ---------- Создание обычной задачи ----------

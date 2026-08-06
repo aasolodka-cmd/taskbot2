@@ -2,11 +2,11 @@ import datetime as dt
 
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy import select
 
 from bot.database import async_session
-from bot.keyboards import TaskDoneCB, task_item_kb
+from bot.keyboards import TaskDoneCB, tasks_done_kb
 from bot.models import Task, TaskAssignee, User
 from bot.utils import fmt_task_line, fmt_overdue_line, today_msk
 
@@ -55,20 +55,16 @@ async def cmd_mytasks(message: Message):
         await message.answer("На сегодня задач нет ▪️")
         return
 
+    text = ""
     if rows:
-        text = f"▪️ Твои задачи на {today.strftime('%d.%m.%Y')}:\n\n"
-        text += "\n".join(fmt_task_line(t.title, t.due_time, t.is_done) for t in rows)
-        await message.answer(text)
-        for t in rows:
-            if not t.is_done:
-                await message.answer(t.title, reply_markup=task_item_kb(t.id, is_admin=user.is_admin))
-
+        text += f"▪️ Твои задачи на {today.strftime('%d.%m.%Y')}:\n\n"
+        text += "\n".join(fmt_task_line(t.title, t.due_time, t.is_done) for t in rows) + "\n\n"
     if overdue:
-        text = "▪️ Просроченные задачи:\n\n"
+        text += "Просроченные задачи:\n"
         text += "\n".join(fmt_overdue_line(t.title, t.due_date, t.due_time) for t in overdue)
-        await message.answer(text)
-        for t in overdue:
-            await message.answer(t.title, reply_markup=task_item_kb(t.id, is_admin=user.is_admin))
+
+    open_tasks = [t for t in list(rows) + list(overdue) if not t.is_done]
+    await message.answer(text.strip(), reply_markup=tasks_done_kb(open_tasks) if open_tasks else None)
 
 
 @router.message(F.text == "Мои задачи")
@@ -86,5 +82,20 @@ async def cb_task_done(query: CallbackQuery, callback_data: TaskDoneCB):
         task.is_done = True
         task.done_at = dt.datetime.utcnow()
         await session.commit()
+
     await query.answer("Отмечено как сделано ✅")
-    await query.message.edit_text(f"{query.message.text}\n\n✅ Выполнено")
+
+    # убираем нажатую кнопку из клавиатуры, остальные кнопки задач оставляем как есть
+    markup = query.message.reply_markup
+    if markup:
+        new_rows = [
+            [btn for btn in row if btn.callback_data != query.data]
+            for row in markup.inline_keyboard
+        ]
+        new_rows = [row for row in new_rows if row]
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=new_rows) if new_rows else None
+            )
+        except Exception:
+            pass

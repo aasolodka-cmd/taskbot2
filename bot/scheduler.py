@@ -75,7 +75,7 @@ async def generate_recurring_tasks():
 
 
 async def morning_digest(bot: Bot):
-    from bot.keyboards import task_item_kb, call_item_kb  # локальный импорт, чтобы избежать циклов
+    from bot.keyboards import tasks_done_kb  # локальный импорт, чтобы избежать циклов
 
     today = today_msk()
 
@@ -141,15 +141,17 @@ async def morning_digest(bot: Bot):
                     fmt_overdue_line(t.title, t.due_date, t.due_time) for t in my_overdue
                 )
 
+            open_tasks = [t for t in list(my_tasks) + list(my_overdue) if not t.is_done]
+
             try:
-                await bot.send_photo(user.id, FSInputFile(BANNER_TASKS), caption=text)
-                for t in my_tasks:
-                    if not t.is_done:
-                        await bot.send_message(
-                            user.id, t.title, reply_markup=task_item_kb(t.id, is_admin=user.is_admin)
-                        )
+                await bot.send_photo(
+                    user.id,
+                    FSInputFile(BANNER_TASKS),
+                    caption=text,
+                    reply_markup=tasks_done_kb(open_tasks) if open_tasks else None,
+                )
             except Exception:
-                pass
+                logger.exception("Не удалось отправить утренний список пользователю %s", user.id)
 
         # Полная сводка по всей команде — только админам
         for admin in admins:
@@ -187,7 +189,7 @@ async def morning_digest(bot: Bot):
             try:
                 await bot.send_photo(admin.id, FSInputFile(BANNER_TASKS), caption=text)
             except Exception:
-                pass
+                logger.exception("Не удалось отправить сводку по команде админу %s", admin.id)
 
 
 async def evening_report(bot: Bot):
@@ -217,7 +219,7 @@ async def evening_report(bot: Bot):
         try:
             await bot.send_photo(admin.id, FSInputFile(BANNER_REPORT), caption=text)
         except Exception:
-            pass
+            logger.exception("Не удалось отправить вечерний отчёт админу %s", admin.id)
 
 
 async def weekly_summary(bot: Bot):
@@ -242,10 +244,12 @@ async def weekly_summary(bot: Bot):
         try:
             await bot.send_photo(admin.id, FSInputFile(BANNER_REPORT), caption=text)
         except Exception:
-            pass
+            logger.exception("Не удалось отправить недельную сводку админу %s", admin.id)
 
 
 async def check_call_reminders(bot: Bot):
+    from bot.keyboards import call_reminder_kb  # локальный импорт, чтобы избежать циклов
+
     now = now_msk().replace(tzinfo=None)
     async with async_session() as session:
         calls = (
@@ -292,7 +296,12 @@ async def check_call_reminders(bot: Bot):
 
             for uid in participants:
                 try:
-                    await bot.send_photo(uid, FSInputFile(BANNER_CALL), caption=text)
+                    await bot.send_photo(
+                        uid,
+                        FSInputFile(BANNER_CALL),
+                        caption=text,
+                        reply_markup=call_reminder_kb(call.id) if reminder_type == "1h" else None,
+                    )
                 except Exception:
                     logger.exception("Не удалось отправить напоминание о созвоне %s пользователю %s", call.id, uid)
 

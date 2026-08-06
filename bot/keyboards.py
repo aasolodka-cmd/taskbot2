@@ -30,6 +30,10 @@ class CallCancelCB(CallbackData, prefix="callcancel"):
     call_id: int
 
 
+class CallAckCB(CallbackData, prefix="callack"):
+    call_id: int
+
+
 def assignee_multiselect_kb(users: list, selected: set[int], session: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     for u in users:
@@ -60,10 +64,26 @@ def call_item_kb(call_id: int) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
+def call_reminder_kb(call_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Готово ✅", callback_data=CallAckCB(call_id=call_id))
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def tasks_done_kb(tasks: list) -> InlineKeyboardMarkup:
+    """Одна кнопка на каждую задачу — жмут, когда сделано."""
+    kb = InlineKeyboardBuilder()
+    for t in tasks:
+        kb.button(text=f"Сделано: {t.title}", callback_data=TaskDoneCB(task_id=t.id))
+    kb.adjust(1)
+    return kb.as_markup()
+
+
 def main_menu_kb(is_admin: bool) -> ReplyKeyboardMarkup:
     rows = [[KeyboardButton(text="Мои задачи"), KeyboardButton(text="Моя статистика")]]
     if is_admin:
         rows.append([KeyboardButton(text="Новая задача"), KeyboardButton(text="Повторяющаяся задача")])
         rows.append([KeyboardButton(text="Новый созвон"), KeyboardButton(text="Команда")])
-        rows.append([KeyboardButton(text="Отчёт (CSV)")])
+        rows.append([KeyboardButton(text="Управление задачами"), KeyboardButton(text="Отчёт (CSV)")])
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)

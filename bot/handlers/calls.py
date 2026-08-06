@@ -12,7 +12,7 @@ from bot.config import BANNER_CALL
 from bot.database import async_session
 from bot.handlers.admin_tasks import is_admin
 from bot.keyboards import (
-    AssigneeCB, AssigneeDoneCB, CallCancelCB, assignee_multiselect_kb, call_item_kb,
+    AssigneeCB, AssigneeDoneCB, CallAckCB, CallCancelCB, assignee_multiselect_kb, call_item_kb,
 )
 from bot.models import Call, CallParticipant, User
 
@@ -169,3 +169,12 @@ async def cb_call_cancel(query: CallbackQuery, callback_data: CallCancelCB, bot:
             await bot.send_message(uid, f"Созвон «{title}» отменён ▪️")
         except Exception:
             logger.exception("Не удалось отправить уведомление об отмене созвона пользователю %s", uid)
+
+
+@router.callback_query(CallAckCB.filter())
+async def cb_call_ack(query: CallbackQuery, callback_data: CallAckCB):
+    await query.answer("Принято ✅")
+    try:
+        await query.message.edit_caption(caption=f"{query.message.caption}\n\n✅ Принято")
+    except Exception:
+        pass
