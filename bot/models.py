@@ -119,3 +119,14 @@ class ReminderLog(Base):
     call_id: Mapped[int] = mapped_column(ForeignKey("calls.id"))
     reminder_type: Mapped[str] = mapped_column(String(16))  # new / 1h / 5m
     sent_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+
+
+class TaskReminderLog(Base):
+    """Чтобы не слать одно и то же напоминание о дедлайне задачи дважды."""
+    __tablename__ = "task_reminder_log"
+    __table_args__ = (UniqueConstraint("task_id", "reminder_type"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"))
+    reminder_type: Mapped[str] = mapped_column(String(16))  # 1h
+    sent_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)

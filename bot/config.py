@@ -24,6 +24,12 @@ WEEKLY_SUMMARY_TIME = "18:00"
 EMOJI_MARK = "▪️"
 EMOJI_DONE = "✅"
 
+# За сколько минут до дедлайна задачи слать напоминание (если у задачи указано время)
+TASK_REMINDER_MINUTES = 60
+
+# На сколько дней вперёд (не считая сегодня) показывать блок «Скоро» в утреннем списке
+UPCOMING_DAYS = 3
+
 ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
 BANNER_TASKS = os.path.join(ASSETS_DIR, "banner-zadachi-na-den.png")
 BANNER_REPORT = os.path.join(ASSETS_DIR, "banner-otchet.png")

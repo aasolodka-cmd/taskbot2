@@ -8,15 +8,16 @@ from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import select
 
 from bot.config import (
-    BANNER_CALL, BANNER_REPORT, BANNER_TASKS, EVENING_REPORT_TIME,
-    MORNING_DIGEST_TIME, TIMEZONE, WEEKLY_SUMMARY_DAY, WEEKLY_SUMMARY_TIME,
+    BANNER_CALL, BANNER_REPORT, BANNER_TASKS, EMOJI_MARK, EVENING_REPORT_TIME,
+    MORNING_DIGEST_TIME, TASK_REMINDER_MINUTES, TIMEZONE, UPCOMING_DAYS,
+    WEEKLY_SUMMARY_DAY, WEEKLY_SUMMARY_TIME,
 )
 from bot.database import async_session
 from bot.models import (
     Call, CallParticipant, RecurringTask, RecurringTaskAssignee, ReminderLog,
-    Task, TaskAssignee, User,
+    Task, TaskAssignee, TaskReminderLog, User,
 )
-from bot.utils import fmt_call_line, fmt_overdue_line, fmt_task_line, now_msk, today_msk
+from bot.utils import fmt_call_line, fmt_overdue_line, fmt_task_line, fmt_upcoming_line, now_msk, today_msk
 
 logger = logging.getLogger(__name__)
 
@@ -124,24 +125,48 @@ async def morning_digest(bot: Bot):
                 )
             ).scalars().all()
 
-            if not my_tasks and not my_overdue and not my_calls:
+            my_upcoming = (
+                await session.execute(
+                    select(Task)
+                    .join(TaskAssignee, TaskAssignee.task_id == Task.id)
+                    .where(
+                        TaskAssignee.user_id == user.id,
+                        Task.is_deleted == False,  # noqa: E712
+                        Task.is_done == False,  # noqa: E712
+                        Task.due_date > today,
+                        Task.due_date <= today + dt.timedelta(days=UPCOMING_DAYS),
+                    )
+                    .order_by(Task.due_date, Task.due_time)
+                )
+            ).scalars().all()
+
+            if not my_tasks and not my_overdue and not my_calls and not my_upcoming:
                 continue
 
             text = f"▪️ Список на {today.strftime('%d.%m.%Y')}\n\n"
-            if my_tasks:
-                text += "Задачи:\n" + "\n".join(
-                    fmt_task_line(t.title, t.due_time, t.is_done) for t in my_tasks
-                ) + "\n\n"
+            text += "Задачи на сегодня:\n"
+            text += (
+                "\n".join(fmt_task_line(t.title, t.due_time, t.is_done) for t in my_tasks)
+                if my_tasks else f"{EMOJI_MARK} нет"
+            )
+            text += "\n\n"
             if my_calls:
                 text += "Созвоны:\n" + "\n".join(
                     fmt_call_line(c.title, c.call_dt, c.zoom_link) for c in my_calls
                 ) + "\n\n"
-            if my_overdue:
-                text += "Просроченные задачи:\n" + "\n".join(
-                    fmt_overdue_line(t.title, t.due_date, t.due_time) for t in my_overdue
-                )
+            text += "Просроченные:\n"
+            text += (
+                "\n".join(fmt_overdue_line(t.title, t.due_date, t.due_time) for t in my_overdue)
+                if my_overdue else f"{EMOJI_MARK} нет"
+            )
+            text += "\n\n"
+            text += "Скоро:\n"
+            text += (
+                "\n".join(fmt_upcoming_line(t.title, t.due_date, t.due_time) for t in my_upcoming)
+                if my_upcoming else f"{EMOJI_MARK} нет"
+            )
 
-            open_tasks = [t for t in list(my_tasks) + list(my_overdue) if not t.is_done]
+            open_tasks = [t for t in list(my_tasks) + list(my_overdue) + list(my_upcoming) if not t.is_done]
 
             try:
                 await bot.send_photo(
@@ -309,6 +334,60 @@ async def check_call_reminders(bot: Bot):
             await session.commit()
 
 
+async def check_task_reminders(bot: Bot):
+    """Напоминание за TASK_REMINDER_MINUTES минут до дедлайна задачи (если у неё указано время)."""
+    from bot.keyboards import task_reminder_kb  # локальный импорт, чтобы избежать циклов
+
+    now = now_msk().replace(tzinfo=None)
+    today = today_msk()
+
+    async with async_session() as session:
+        tasks = (
+            await session.execute(
+                select(Task).where(
+                    Task.is_deleted == False,  # noqa: E712
+                    Task.is_done == False,  # noqa: E712
+                    Task.due_date == today,
+                    Task.due_time.is_not(None),
+                )
+            )
+        ).scalars().all()
+
+        for task in tasks:
+            deadline = dt.datetime.combine(task.due_date, task.due_time)
+            delta_min = (deadline - now).total_seconds() / 60
+            if delta_min < 0 or delta_min > TASK_REMINDER_MINUTES:
+                continue
+
+            already_sent = (
+                await session.execute(
+                    select(TaskReminderLog).where(
+                        TaskReminderLog.task_id == task.id,
+                        TaskReminderLog.reminder_type == "1h",
+                    )
+                )
+            ).scalar_one_or_none()
+            if already_sent:
+                continue
+
+            assignee_ids = (
+                await session.execute(
+                    select(TaskAssignee.user_id).where(TaskAssignee.task_id == task.id)
+                )
+            ).scalars().all()
+
+            text = f"▪️ Напоминание: «{task.title}» — дедлайн в {task.due_time.strftime('%H:%M')} мск"
+
+            for uid in assignee_ids:
+                try:
+                    await bot.send_message(uid, text, reply_markup=task_reminder_kb(task.id))
+                except Exception:
+                    logger.exception("Не удалось отправить напоминание о задаче %s пользователю %s", task.id, uid)
+
+            session.add(TaskReminderLog(task_id=task.id, reminder_type="1h"))
+            await session.commit()
+
+
 def setup_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone=TIMEZONE)
 
@@ -337,6 +416,7 @@ def setup_scheduler(bot: Bot) -> AsyncIOScheduler:
     )
 
     scheduler.add_job(check_call_reminders, "interval", minutes=1, args=[bot], id="call_reminders")
+    scheduler.add_job(check_task_reminders, "interval", minutes=1, args=[bot], id="task_reminders")
     scheduler.add_job(
         generate_recurring_tasks,
         CronTrigger(hour=0, minute=5, timezone=TIMEZONE),

@@ -80,6 +80,13 @@ def tasks_done_kb(tasks: list) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
+def task_reminder_kb(task_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Сделано ✅", callback_data=TaskDoneCB(task_id=task_id))
+    kb.adjust(1)
+    return kb.as_markup()
+
+
 def main_menu_kb(is_admin: bool) -> ReplyKeyboardMarkup:
     rows = [[KeyboardButton(text="Мои задачи"), KeyboardButton(text="Моя статистика")]]
     if is_admin:

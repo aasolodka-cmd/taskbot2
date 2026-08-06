@@ -34,6 +34,11 @@ def fmt_overdue_line(title: str, due_date: dt.date, due_time) -> str:
     return f"{EMOJI_MARK} {title} — с {fmt_date(due_date)}{time_part}"
 
 
+def fmt_upcoming_line(title: str, due_date: dt.date, due_time) -> str:
+    time_part = f" {fmt_time(due_time)}" if due_time else ""
+    return f"{EMOJI_MARK} {title} — до {fmt_date(due_date)}{time_part}"
+
+
 def fmt_call_line(title: str, call_dt: dt.datetime, zoom_link: str | None) -> str:
     line = f"{EMOJI_MARK} {title} — {call_dt.strftime('%H:%M')}"
     if zoom_link:

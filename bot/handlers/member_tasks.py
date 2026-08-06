@@ -5,10 +5,11 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy import select
 
+from bot.config import EMOJI_MARK, UPCOMING_DAYS
 from bot.database import async_session
 from bot.keyboards import TaskDoneCB, tasks_done_kb
 from bot.models import Task, TaskAssignee, User
-from bot.utils import fmt_task_line, fmt_overdue_line, today_msk
+from bot.utils import fmt_task_line, fmt_overdue_line, fmt_upcoming_line, today_msk
 
 router = Router()
 
@@ -51,19 +52,42 @@ async def cmd_mytasks(message: Message):
             )
         ).scalars().all()
 
-    if not rows and not overdue:
-        await message.answer("На сегодня задач нет ▪️")
+        upcoming = (
+            await session.execute(
+                select(Task)
+                .join(TaskAssignee, TaskAssignee.task_id == Task.id)
+                .where(
+                    TaskAssignee.user_id == user_id,
+                    Task.is_deleted == False,  # noqa: E712
+                    Task.is_done == False,  # noqa: E712
+                    Task.due_date > today,
+                    Task.due_date <= today + dt.timedelta(days=UPCOMING_DAYS),
+                )
+                .order_by(Task.due_date, Task.due_time)
+            )
+        ).scalars().all()
+
+    if not rows and not overdue and not upcoming:
+        await message.answer("Задач нет ▪️")
         return
 
-    text = ""
-    if rows:
-        text += f"▪️ Твои задачи на {today.strftime('%d.%m.%Y')}:\n\n"
-        text += "\n".join(fmt_task_line(t.title, t.due_time, t.is_done) for t in rows) + "\n\n"
-    if overdue:
-        text += "Просроченные задачи:\n"
-        text += "\n".join(fmt_overdue_line(t.title, t.due_date, t.due_time) for t in overdue)
+    text = f"▪️ Список задач на {today.strftime('%d.%m.%Y')}\n\n"
+    text += "Задачи на сегодня:\n"
+    text += "\n".join(fmt_task_line(t.title, t.due_time, t.is_done) for t in rows) if rows else f"{EMOJI_MARK} нет"
+    text += "\n\n"
+    text += "Просроченные:\n"
+    text += (
+        "\n".join(fmt_overdue_line(t.title, t.due_date, t.due_time) for t in overdue)
+        if overdue else f"{EMOJI_MARK} нет"
+    )
+    text += "\n\n"
+    text += "Скоро:\n"
+    text += (
+        "\n".join(fmt_upcoming_line(t.title, t.due_date, t.due_time) for t in upcoming)
+        if upcoming else f"{EMOJI_MARK} нет"
+    )
 
-    open_tasks = [t for t in list(rows) + list(overdue) if not t.is_done]
+    open_tasks = [t for t in list(rows) + list(overdue) + list(upcoming) if not t.is_done]
     await message.answer(text.strip(), reply_markup=tasks_done_kb(open_tasks) if open_tasks else None)
 
 
