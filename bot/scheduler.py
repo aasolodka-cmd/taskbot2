@@ -1,4 +1,5 @@
 import datetime as dt
+import logging
 
 from aiogram import Bot
 from aiogram.types import FSInputFile
@@ -16,6 +17,8 @@ from bot.models import (
     Task, TaskAssignee, User,
 )
 from bot.utils import fmt_call_line, fmt_overdue_line, fmt_task_line, now_msk, today_msk
+
+logger = logging.getLogger(__name__)
 
 
 async def _get_users(session):
@@ -291,7 +294,7 @@ async def check_call_reminders(bot: Bot):
                 try:
                     await bot.send_photo(uid, FSInputFile(BANNER_CALL), caption=text)
                 except Exception:
-                    pass
+                    logger.exception("Не удалось отправить напоминание о созвоне %s пользователю %s", call.id, uid)
 
             session.add(ReminderLog(call_id=call.id, reminder_type=reminder_type))
             await session.commit()
@@ -301,20 +304,34 @@ def setup_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone=TIMEZONE)
 
     m_hour, m_min = MORNING_DIGEST_TIME.split(":")
-    scheduler.add_job(morning_digest, CronTrigger(hour=m_hour, minute=m_min), args=[bot], id="morning_digest")
+    scheduler.add_job(
+        morning_digest,
+        CronTrigger(hour=m_hour, minute=m_min, timezone=TIMEZONE),
+        args=[bot],
+        id="morning_digest",
+    )
 
     e_hour, e_min = EVENING_REPORT_TIME.split(":")
-    scheduler.add_job(evening_report, CronTrigger(hour=e_hour, minute=e_min), args=[bot], id="evening_report")
+    scheduler.add_job(
+        evening_report,
+        CronTrigger(hour=e_hour, minute=e_min, timezone=TIMEZONE),
+        args=[bot],
+        id="evening_report",
+    )
 
     w_hour, w_min = WEEKLY_SUMMARY_TIME.split(":")
     scheduler.add_job(
         weekly_summary,
-        CronTrigger(day_of_week=WEEKLY_SUMMARY_DAY, hour=w_hour, minute=w_min),
+        CronTrigger(day_of_week=WEEKLY_SUMMARY_DAY, hour=w_hour, minute=w_min, timezone=TIMEZONE),
         args=[bot],
         id="weekly_summary",
     )
 
     scheduler.add_job(check_call_reminders, "interval", minutes=1, args=[bot], id="call_reminders")
-    scheduler.add_job(generate_recurring_tasks, CronTrigger(hour=0, minute=5), id="generate_recurring")
+    scheduler.add_job(
+        generate_recurring_tasks,
+        CronTrigger(hour=0, minute=5, timezone=TIMEZONE),
+        id="generate_recurring",
+    )
 
     return scheduler

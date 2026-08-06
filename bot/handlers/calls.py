@@ -1,4 +1,5 @@
 import datetime as dt
+import logging
 
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
@@ -16,6 +17,7 @@ from bot.keyboards import (
 from bot.models import Call, CallParticipant, User
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
 class NewCallFSM(StatesGroup):
@@ -138,7 +140,7 @@ async def newcall_link(message: Message, state: FSMContext, bot: Bot):
         try:
             await bot.send_photo(uid, FSInputFile(BANNER_CALL), caption=text)
         except Exception:
-            pass
+            logger.exception("Не удалось отправить уведомление о новом созвоне пользователю %s", uid)
 
 
 @router.callback_query(CallCancelCB.filter())
@@ -166,4 +168,4 @@ async def cb_call_cancel(query: CallbackQuery, callback_data: CallCancelCB, bot:
         try:
             await bot.send_message(uid, f"Созвон «{title}» отменён ▪️")
         except Exception:
-            pass
+            logger.exception("Не удалось отправить уведомление об отмене созвона пользователю %s", uid)
